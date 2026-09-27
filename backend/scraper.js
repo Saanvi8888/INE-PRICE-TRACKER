@@ -1,3 +1,6 @@
+process.env.PLAYWRIGHT_BROWSERS_PATH = "0";
+
+const { chromium } = require("playwright");
 const { chromium } = require("playwright");
 
 async function scrapeProduct(productId, selectedVariant) {
