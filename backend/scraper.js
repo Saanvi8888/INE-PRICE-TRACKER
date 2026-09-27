@@ -1,10 +1,16 @@
 const { chromium } = require("playwright");
 
 async function scrapeProduct(productId, selectedVariant) {
-  const browser = await chromium.launch({
-    headless: false,
-    channel: "chrome",
-  });
+//   const browser = await chromium.launch({
+//     headless: false,
+//     channel: "chrome",
+//   });
+    const browser = await chromium.launch({
+        headless: process.env.NODE_ENV === "production",
+        ...(process.env.NODE_ENV !== "production"
+            ? { channel: "chrome" }
+            : {})
+    });
 
   const page = await browser.newPage();
   let productName = "";
@@ -490,10 +496,16 @@ async function scrapeProduct(productId, selectedVariant) {
 }
 
 async function searchProducts(search) {
-  const browser = await chromium.launch({
-    headless: false,
-    channel: "chrome"
-  });
+//   const browser = await chromium.launch({
+//     headless: false,
+//     channel: "chrome"
+//   });
+const browser = await chromium.launch({
+    headless: process.env.NODE_ENV === "production",
+    ...(process.env.NODE_ENV !== "production"
+        ? { channel: "chrome" }
+        : {})
+});
 
   try {
     const page = await browser.newPage();
@@ -531,9 +543,15 @@ async function searchProducts(search) {
 }
 
 async function getProductVariants(productId) {
+    // const browser = await chromium.launch({
+    //     headless: false,
+    //     channel: "chrome"
+    // });
     const browser = await chromium.launch({
-        headless: false,
-        channel: "chrome"
+        headless: process.env.NODE_ENV === "production",
+        ...(process.env.NODE_ENV !== "production"
+            ? { channel: "chrome" }
+            : {})
     });
 
     try {
