@@ -9,7 +9,18 @@ function TrackedProducts() {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/tracked-products`);
       const data = await response.json();
-      setProducts(data);
+
+    const uniqueProducts = data.filter(
+    (product, index, self) =>
+        index ===
+        self.findIndex(
+        (p) =>
+            p.product_id === product.product_id &&
+            p.variant === product.variant
+        )
+    );
+
+    setProducts(uniqueProducts);
     } catch (error) {
       console.error("TRACKED PRODUCTS ERROR:", error);
     }
