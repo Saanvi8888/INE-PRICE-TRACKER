@@ -135,6 +135,7 @@ async function scrapeProduct(productId, selectedVariant) {
         }
     }
 
+
     console.log("STARTING PRODUCT SCRAPE");
     console.log("Product ID:", productId);
     console.log("Selected Variant:", selectedVariant);
@@ -321,7 +322,7 @@ async function scrapeProduct(productId, selectedVariant) {
 
     let panelState = "unknown";
     let successfulAttempt = 0;
-    const MAX_RETRIES = 4;
+    const MAX_RETRIES = 6;
 
     for (let retry = 1; retry <= MAX_RETRIES; retry++) {
       console.log(`\nPrice check attempt ${retry}/${MAX_RETRIES}`);
@@ -497,53 +498,91 @@ async function scrapeProduct(productId, selectedVariant) {
   }
 }
 
-async function searchProducts(search) {
-//   const browser = await chromium.launch({
-//     headless: false,
-//     channel: "chrome"
-//   });
-const browser = await chromium.launch({
-    headless: process.env.NODE_ENV === "production",
-    ...(process.env.NODE_ENV !== "production"
-        ? { channel: "chrome" }
-        : {})
-});
+let catalogCache = null;
+let catalogCacheTime = 0;
 
-  try {
-    const page = await browser.newPage();
+const CATALOG_CACHE_TTL = 30 * 60 * 1000;
+async function searchProducts(search) {
+  const now = Date.now();
+
+  if (!catalogCache ||now - catalogCacheTime > CATALOG_CACHE_TTL) {
+    console.log("Refreshing catalog cache...");
     const products = [];
     let pageNumber = 1;
     let totalPages = 1;
-    while (pageNumber <= totalPages) {
-      console.log(`Fetching catalog page ${pageNumber}/${totalPages}`);
-      await page.goto(
-        `https://demo.inelabteamdev.com/api/v2/listings?page=${pageNumber}&limit=20`,
-        { waitUntil: "networkidle" }
-      );
 
-      const data = await page.locator("body").innerText();
-      const listing = JSON.parse(data);
-      totalPages = listing.totalPages;
-      for (const product of (Array.isArray(listing.results)? listing.results : [])) {
-        if (search && !product.name.toLowerCase().includes(search.toLowerCase())) {
-          continue;
+    while (pageNumber <= totalPages) {
+        console.log(`Fetching catalog page ${pageNumber}/${totalPages}`);
+        let response = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                response = await fetch(
+                    `https://demo.inelabteamdev.com/api/v2/listings?page=${pageNumber}&limit=20`
+                );
+
+                if (response.ok) {
+                    if (attempt > 1) {
+                        console.log(
+                            `Catalog page ${pageNumber} succeeded on attempt ${attempt}/3`
+                        );
+                    }
+
+                    break;
+                }
+
+                console.log(
+                    `Catalog page ${pageNumber} failed: ${response.status} (attempt ${attempt}/3)`
+                );
+
+            } catch (error) {
+                console.log(
+                    `Catalog page ${pageNumber} error: ${error.message} (attempt ${attempt}/3)`
+                );
+            }
+
+            if (attempt < 3) {
+                await new Promise(resolve =>
+                    setTimeout(resolve, attempt * 3000)
+                );
+            }
         }
 
-        products.push({
-          id: product.id,
-          name: product.name
-        });
+        if (!response || !response.ok) {
+            throw new Error(
+                `Failed to fetch catalog page ${pageNumber} after 3 attempts`
+            );
+        }
 
-        console.log("FOUND PRODUCT:",product.name,"ID:",product.id);
-      }
-      pageNumber++;
+        const listing = await response.json();
+
+        totalPages = listing.totalPages;
+
+        for (const product of (Array.isArray(listing.results)? listing.results: [])) {
+            products.push({
+                id: product.id,
+                name: product.name
+            });
+        }
+
+        pageNumber++;
     }
-    return products;
-  } finally {
-    await browser.close();
-  }
-}
 
+    catalogCache = products;
+    catalogCacheTime = now;
+
+    console.log(
+      `Catalog cache updated: ${catalogCache.length} products`
+    );
+  } else {
+    console.log("Using cached catalog");
+  }
+
+  const query = (search || "").toLowerCase().trim();
+
+  return catalogCache.filter(product =>
+    product.name.toLowerCase().includes(query)
+  );
+}
 async function getProductVariants(productId) {
     // const browser = await chromium.launch({
     //     headless: false,
